@@ -4,42 +4,48 @@ namespace WebApi;
 
 public class HeartBeatSender : IHostedService
 {
-    private readonly IBus messageBus;
     private readonly ILogger<HeartBeatSender> logger;
+    private readonly IBus messageBus;
+    private readonly Random random;
+    private CancellationTokenSource cts;
     private Task task;
 
     public HeartBeatSender(IBus messageBus, ILogger<HeartBeatSender> logger)
     {
         this.messageBus = messageBus;
         this.logger = logger;
+        random = new Random();
     }
 
     public Task StartAsync(CancellationToken cancellationToken)
     {
-        this.task = Task.Run(async () =>
+        cts = new CancellationTokenSource();
+        task = Task.Run(async () =>
         {
-            while (cancellationToken.IsCancellationRequested == false)
+            while (cts.Token.IsCancellationRequested == false)
             {
                 try
                 {
-                    await Task.Delay(TimeSpan.FromSeconds(3), cancellationToken);
-                    var heartBeat = new HeartBeat();
-                    await messageBus.Publish(heartBeat, cancellationToken);
-                    this.logger.LogInformation("Sent heartbeat {Timestamp}", heartBeat.Timestamp);
-                    
+                    var numberOfMessages = random.Next(10);
+                    var messages = Enumerable.Range(0, numberOfMessages).Select(o => new HeartBeat());
+                    await messageBus.PublishBatch(messages, cts.Token);
+                    logger.LogInformation("Sent {Number} heartbeats", numberOfMessages);
+
+                    var wait = TimeSpan.FromSeconds(random.Next(10));
+                    await Task.Delay(wait, cts.Token);
                 }
                 catch (OperationCanceledException)
                 {
                     logger.LogWarning("Task cancelled");
                 }
             }
-        }, cancellationToken);
+        }, cts.Token);
         return Task.CompletedTask;
-        
     }
 
     public async Task StopAsync(CancellationToken cancellationToken)
     {
-        await this.task;
+        cts.Cancel();
+        await task;
     }
 }

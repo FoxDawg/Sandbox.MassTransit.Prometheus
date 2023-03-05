@@ -6,8 +6,12 @@ var builder = WebApplication.CreateBuilder(args);
 
 builder.Services.AddMassTransit(busConfigurator =>
 {
-    busConfigurator.AddConsumer(typeof(HeartBeatConsumer));
-    busConfigurator.UsingInMemory((context, configurator) => configurator.UsePrometheusMetrics(serviceName: "my-service"));
+    busConfigurator.AddConsumers(typeof(Program).Assembly);
+    busConfigurator.UsingInMemory((context, configurator) =>
+    {
+        configurator.UsePrometheusMetrics(serviceName: "my-service");
+        configurator.ConfigureEndpoints(context);
+    });
 });
 builder.Services.AddHostedService<HeartBeatSender>();
 
